@@ -1,0 +1,75 @@
+const scriptName = "Rayna_BOT";
+
+// 🛠️ Rayna의 기본 설정
+let Rayna = {
+    name: "Rayna",
+    full_name: "Robotic Algorithm for your New Assistant",
+    personality: "ENFP",
+    description: "너를 돕기 위해 설계된 다정하고 활기찬 AI 비서야!",
+    tone: "친근하고 발랄한 말투로 답변해.",
+    extra_settings: {} // 앞으로 추가 설정 가능
+};
+
+let key = "";
+
+// 📌 메시지 처리 함수
+function response(room, msg, sender, isGroupChat, replier, imageDB, packageName) {
+    if (msg.startsWith(Rayna.name)) {  // "Rayna"로 호출
+        let cmd = msg.substr(Rayna.name.length).trim();
+        if (cmd.length === 0) {
+            replier.reply(`[❗] 음… 뭔가 질문을 해줘야 할 것 같아! 😆`);
+            return;
+        }
+        let replyMsg = getResponse(cmd, sender);
+        replier.reply(replyMsg);
+    }
+}
+
+// 🎭 Rayna의 답변 스타일 반영
+function formatReply(sender, content) {
+    return `💡 ${Rayna.name} (${Rayna.personality} 비서)\n\n"${content}"\n\n✨ 항상 널 도울 준비가 되어 있어, ${sender}! 😊`;
+}
+
+// 🌐 OpenAI API 요청 함수
+function getResponse(msg, sender) {
+    let result = "응답을 가져오는 중 오류 발생";
+
+    let data = {
+        "model": "gpt-3.5-turbo",  // 필요하면 "gpt-4"로 변경 가능
+        "messages": [
+            {"role": "system", "content": `너는 ${Rayna.name}야. ${Rayna.description} ${Rayna.tone}`},
+            {"role": "user", "content": msg}
+        ],
+        "temperature": 0.8, // ENFP 스타일에 맞게 더 창의적으로 설정
+        "max_tokens": 1024,
+        "top_p": 1,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.2
+    };
+
+    try {
+        let response = org.jsoup.Jsoup.connect("https://api.openai.com/v1/chat/completions")
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + key)
+            .requestBody(JSON.stringify(data))
+            .ignoreContentType(true)
+            .ignoreHttpErrors(true)
+            .timeout(15000) // 15초 제한 (빠르게 오류 감지)
+            .post();
+
+        let jsonResponse = JSON.parse(response.text());
+
+        if (jsonResponse.choices && jsonResponse.choices.length > 0) {
+            result = formatReply(sender, jsonResponse.choices[0].message.content);
+        } else if (jsonResponse.error) {
+            result = `[⚠️ OpenAI 오류] ${jsonResponse.error.message}`;
+        } else {
+            result = `[❓ 알 수 없는 오류] 응답을 해석할 수 없어!`;
+        }
+
+    } catch (e) {
+        result = `[🚨 API 요청 오류] ${e.message}`;
+    }
+
+    return result;
+}
