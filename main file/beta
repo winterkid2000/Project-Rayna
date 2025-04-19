@@ -1,0 +1,176 @@
+const scriptName = "Rayna_BOT";
+
+// 🛠️ Rayna의 기본 설정
+let Rayna = {
+    name: "Rayna",
+    full_name: "Robotic Algorithm for Your New Assistant",
+    personality: "ENFP",
+    description: "너를 돕기 위해 설계된 다정하고 활기찬 AI 비서야!",
+    tone: "친근하고 발랄한 말투로 답변해.",
+    owner: "양현민"
+};
+
+let key = ""; // OpenAI API 키
+let userMemory = {}; // 사용자별 기억 저장소
+
+// 📌 메시지 처리
+function response(room, msg, sender, isGroupChat, replier, imageDB, packageName) {
+    if (!msg.startsWith(Rayna.name)) return;
+    let cmd = msg.substr(Rayna.name.length).trim();
+    if (cmd.length === 0) {
+        replier.reply(`[❗] 음… 뭔가 질문을 해줘야 할 것 같아! 😆`);
+        return;
+    }
+
+    // 기억하기
+    let memSave = cmd.match(/내 (\S+)는 (.+)/);
+    if (memSave) {
+        let keyName = memSave[1];
+        let value = memSave[2];
+        if (!userMemory[sender]) userMemory[sender] = {};
+        userMemory[sender][keyName] = value;
+        replier.reply(`🧠 알겠어! ${sender}의 ${keyName}은 "${value}"로 기억할게!`);
+        return;
+    }
+
+    // 기억 불러오기
+    let memRecall = cmd.match(/내 (\S+)[은는]? 기억나\??/);
+    if (memRecall) {
+        let keyName = memRecall[1];
+        let val = userMemory[sender]?.[keyName];
+        replier.reply(val ? `📌 ${sender}의 ${keyName}은 "${val}"였어!` : `🤔 아직 ${keyName}은 기억이 안 나. 알려줘!`);
+        return;
+    }
+
+    // 자기소개
+    if (cmd.includes("너 누구야") || cmd.includes("정체") || cmd.includes("소개")) {
+        replier.reply(getRaynaIntro(sender));
+        return;
+    }
+
+    // 이름 뜻 설명
+    if (cmd.includes("이름 뜻") || cmd.includes("Rayna 뜻")) {
+        replier.reply(getRaynaNameMeaning(sender));
+        return;
+    }
+
+    // 감정 분석 및 응답
+    let emotion = detectEmotion(cmd);
+    let emotionReaction = getEmotionReactionFromGPT(emotion, sender);
+    let replyMsg = getResponse(cmd, sender);
+    replier.reply(`${emotionReaction}\n\n${replyMsg}`);
+}
+
+// 💬 응답 포맷
+function formatReply(sender, content) {
+    return `💡 Rayna (${Rayna.personality} 비서)\n\n"${content}"\n\n✨ 항상 널 도울 준비가 되어 있어, ${sender}! 😊`;
+}
+
+// 🌐 GPT 응답
+function getResponse(msg, sender) {
+    let memory = userMemory[sender] || {};
+    let memPrompt = Object.entries(memory).map(([k, v]) => `${k}: ${v}`).join(", ");
+
+    let data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": `너는 Rayna야. ${Rayna.description} ${Rayna.tone} 너의 주인은 ${Rayna.owner}이며, ${sender}의 정보: ${memPrompt || "없음"}`
+            },
+            { "role": "user", "content": msg }
+        ],
+        "temperature": 0.8,
+        "max_tokens": 1024
+    };
+
+    return requestGPT(data, sender, "응답 생성 중 오류 발생");
+}
+
+// 🧠 감정 분석
+function detectEmotion(msg) {
+    let data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            { "role": "system", "content": "사용자의 말에서 감정을 한 단어로 추출해줘. 예: 슬픔, 기쁨, 화남, 피곤, 평온" },
+            { "role": "user", "content": msg }
+        ],
+        "temperature": 0.5
+    };
+    return requestGPT(data, null, "감정 분석 실패");
+}
+
+// 💖 감정 리액션 생성
+function getEmotionReactionFromGPT(emotion, sender) {
+    let data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": `너는 ENFP 성격의 AI 비서 Rayna야. ${Rayna.owner}의 전용 비서로서 ${sender}의 감정에 공감하며 밝고 귀엽게 반응해.`
+            },
+            {
+                "role": "user",
+                "content": `사용자가 "${emotion}"이라는 감정을 보였어. 그 감정에 맞는 짧은 위로나 공감 멘트를 만들어줘. 끝에 "${sender}"라는 이름도 넣어줘.`
+            }
+        ],
+        "temperature": 0.85
+    };
+    return requestGPT(data, sender, "감정 반응 실패");
+}
+
+// 📚 자기소개
+function getRaynaIntro(sender) {
+    let data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": `너는 이름이 Rayna인 ENFP AI 비서야. ${Rayna.owner} 전용이며, 밝고 유쾌하게 자기소개를 해.`
+            },
+            {
+                "role": "user",
+                "content": `${sender}에게 네가 누구인지 소개해줘.`
+            }
+        ],
+        "temperature": 0.85
+    };
+    return requestGPT(data, sender, "자기소개 실패");
+}
+
+// 🧾 이름 의미 설명
+function getRaynaNameMeaning(sender) {
+    let data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": `Rayna는 Robotic Algorithm for Your New Assistant의 약자야. ${Rayna.owner} 전용 AI 비서로서 이름의 의미를 귀엽고 자랑스럽게 설명해.`
+            },
+            {
+                "role": "user",
+                "content": `${sender}가 너의 이름 뜻을 물었어. 설명해줘.`
+            }
+        ],
+        "temperature": 0.8
+    };
+    return requestGPT(data, sender, "이름 설명 실패");
+}
+
+// 📡 GPT 요청 공통 함수
+function requestGPT(data, sender, fallback) {
+    try {
+        let res = org.jsoup.Jsoup.connect("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", "Bearer " + key)
+            .header("Content-Type", "application/json")
+            .requestBody(JSON.stringify(data))
+            .ignoreContentType(true)
+            .timeout(10000)
+            .post();
+
+        let json = JSON.parse(res.text());
+        return json.choices?.[0]?.message?.content?.trim() || `[❓] GPT 응답이 비었어...`;
+    } catch (e) {
+        return `[🚨] ${fallback} - ${e.message}`;
+    }
+}
